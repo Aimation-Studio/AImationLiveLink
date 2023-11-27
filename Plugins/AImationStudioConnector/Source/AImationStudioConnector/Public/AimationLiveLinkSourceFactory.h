@@ -7,12 +7,16 @@
 
 #include "AimationLiveLinkSourceFactory.generated.h"
 
+class AimationLiveLinkSource;
+
 UCLASS()
 class UCustomLiveLinkSourceFactory : public ULiveLinkSourceFactory
 {
     GENERATED_BODY()
 
 public:
+    UCustomLiveLinkSourceFactory();
+
     // Override functions required by ULiveLinkSourceFactory
     FText GetSourceDisplayName() const override
     {
@@ -31,13 +35,8 @@ public:
         return TSharedPtr<SWidget>();
     }
 
-    virtual TSharedPtr<ILiveLinkSource> CreateSource(const FString& ConnectionString) const override
-    {
-        return TSharedPtr<ILiveLinkSource>();
-        //return MakeShared<UCustomLiveLinkSource>(m_source);
-    }
+    virtual TSharedPtr<ILiveLinkSource> CreateSource(const FString& ConnectionString) const override;
 
-    //UCustomLiveLinkSource m_source;
-    // Other functions and properties as needed
+    TSharedPtr< AimationLiveLinkSource > m_aimationSource = nullptr;
 };
 

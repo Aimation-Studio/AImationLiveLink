@@ -39,7 +39,9 @@ public class AImationStudioConnector : ModuleRules
 				"Slate",
 				"SlateCore",
                 "LiveLinkInterface",
-                "WebSockets"
+                "WebSockets",
+                "JsonUtilities",
+                "Json"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
