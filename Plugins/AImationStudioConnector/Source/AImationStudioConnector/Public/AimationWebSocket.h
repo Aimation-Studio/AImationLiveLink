@@ -22,7 +22,6 @@ public:
 
     void Connect(const FString& InUrl);
     void Disconnect();
-    void SendBinaryData(const TArray<uint8>& InData);
     void OnConnected();
     void OnConnectionError(const FString& Error);
     void OnClosed(int32 StatusCode, const FString& Reason, bool bWasClean);
@@ -30,8 +29,11 @@ public:
     inline bool IsConnected() const { return WebSocket.IsValid() && WebSocket->IsConnected(); }
     //FOnBinaryMessageReceived OnBinaryMessageReceived;
 
+    template< typename T >
+    inline void SendPacket( T & packet );
 private:
     TSharedPtr<IWebSocket> WebSocket;
+    TArray<uint8> m_receiveBuffer;
 
     void OnBinaryMessage(const void* InData, SIZE_T InSize, bool isLastFragment);
 };

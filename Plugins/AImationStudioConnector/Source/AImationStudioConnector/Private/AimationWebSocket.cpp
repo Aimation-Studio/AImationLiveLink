@@ -7,6 +7,8 @@
 
 UAimationWebSocket::UAimationWebSocket() : WebSocket(nullptr)
 {
+    // preallocate a 64mb receiving buffer
+    m_receiveBuffer.Reserve(64 * 1024 * 1024);
 }
 
 UAimationWebSocket::~UAimationWebSocket()
@@ -41,9 +43,13 @@ void UAimationWebSocket::Disconnect()
     }
 }
 
-void UAimationWebSocket::SendBinaryData(const TArray<uint8>& InData)
+template< typename T >
+void UAimationWebSocket::SendPacket(T& packet)
 {
-
+    FString out{};
+    AimationHelpers::PacketToString(packet, out, 0, 0, 0);
+    auto registerEnginePkt = AimationHelpers::CreateAimationPacket(out);
+    WebSocket->Send(registerEnginePkt.GetData(), registerEnginePkt.Num(), true);
 }
 
 void UAimationWebSocket::OnConnected()
@@ -51,13 +57,9 @@ void UAimationWebSocket::OnConnected()
     UE_LOG(LogTemp, Log, TEXT("AimationWebSocket connected"));
 
     FRegisterEngineConnectorPacket Packet;
-    Packet.EngineName = "Unreal Engine";
+    Packet.EngineName = "Unreal Engine hiha";
 
-    // TODO: generics
-    FString out{};
-    AimationHelpers::PacketToString( Packet, out, 0, 0, 0 );
-    auto registerEnginePkt = AimationHelpers::CreateAimationPacket(out);
-    WebSocket->Send(registerEnginePkt.GetData(), registerEnginePkt.Num(), true);
+    SendPacket(Packet);
 }
 
 void UAimationWebSocket::OnConnectionError(const FString& Error)
@@ -75,7 +77,28 @@ void UAimationWebSocket::OnMessage(const FString& Message)
     UE_LOG(LogTemp, Log, TEXT("AimationWebSocket received message: %s"), *Message);
 }
 
+///#include "ThirdParty/nlohmann_json/json.hpp"
+#include "ThirdParty/nlohmann_json/json.hpp"
+
 void UAimationWebSocket::OnBinaryMessage(const void* InData, SIZE_T InSize, bool isLastFragment)
 {
-    UE_LOG(LogTemp, Log, TEXT("AimationWebSocket received binary message"));
+    // Convert the binary data to a TArray<uint8>
+    TArray<uint8> ReceivedBytes(reinterpret_cast<const uint8*>(InData), InSize);
+
+    // Convert received bytes from_msgpack using nlohmann::json
+    nlohmann::json j = nlohmann::json::from_msgpack(ReceivedBytes.GetData());
+    auto dumped = j.dump();
+    UE_LOG(LogTemp, Log, TEXT("AimationWebSocket received message: %s"), *FString(dumped.c_str()));
+    //// Deserialize the MessagePack object using RPCLIB_MSGPACK
+    //clmdep_msgpack::zone z;
+    //clmdep_msgpack::object_handle oh = clmdep_msgpack::unpack(ReceivedBytes.GetData(), ReceivedBytes.Num(), &z);
+
+    //// Assuming the deserialization was successful
+    //const clmdep_msgpack::object& msgpackObject = oh.get();
+
+    //// Convert the MessagePack object to an Unreal JsonObject
+    //FJsonObject JsonObject;
+
+    //// Use the appropriate serialization function based on the content of msgpackObject
+    //msgpackObject.msgpack_object(&JsonObject, z);
 }

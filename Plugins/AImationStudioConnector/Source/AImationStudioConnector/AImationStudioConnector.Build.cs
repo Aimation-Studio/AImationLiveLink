@@ -7,7 +7,12 @@ public class AImationStudioConnector : ModuleRules
 	public AImationStudioConnector(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
-		
+
+		PublicIncludePaths.AddRange(
+			new string[] {
+				// ... add other public include paths required here ...
+			}
+		);
 		PublicIncludePaths.AddRange(
 			new string[] {
 				// ... add public include paths required here ...
@@ -41,11 +46,11 @@ public class AImationStudioConnector : ModuleRules
                 "LiveLinkInterface",
                 "WebSockets",
                 "JsonUtilities",
-                "Json"
+                "Json",
+                "nlohmann_json"
 				// ... add private dependencies that you statically link with here ...	
 			}
 			);
-		
 		
 		DynamicallyLoadedModuleNames.AddRange(
 			new string[]
