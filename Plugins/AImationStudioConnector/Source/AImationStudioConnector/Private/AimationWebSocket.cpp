@@ -1,14 +1,17 @@
 
 #include "AimationWebSocket.h"
 #include "AImationStudioConnector.h"
-#include "Utils2.h"
+#include "Protocol/ProtocolUtils.h"
 
 #include "Protocol/RegisterEngineConnector.h"
+#include "ThirdParty/nlohmann_json/json.hpp"
 
 UAimationWebSocket::UAimationWebSocket() : WebSocket(nullptr)
 {
     // preallocate a 64mb receiving buffer
     m_receiveBuffer.Reserve(64 * 1024 * 1024);
+
+    RegisterPacketHandler< FRegisterEngineConnectorResponsePacket >(this, &UAimationWebSocket::OnRegisterEngineConnectorPacket);
 }
 
 UAimationWebSocket::~UAimationWebSocket()
@@ -77,28 +80,36 @@ void UAimationWebSocket::OnMessage(const FString& Message)
     UE_LOG(LogTemp, Log, TEXT("AimationWebSocket received message: %s"), *Message);
 }
 
-///#include "ThirdParty/nlohmann_json/json.hpp"
-#include "ThirdParty/nlohmann_json/json.hpp"
 
 void UAimationWebSocket::OnBinaryMessage(const void* InData, SIZE_T InSize, bool isLastFragment)
 {
-    // Convert the binary data to a TArray<uint8>
     TArray<uint8> ReceivedBytes(reinterpret_cast<const uint8*>(InData), InSize);
+    m_receiveBuffer.Append(ReceivedBytes);
 
-    // Convert received bytes from_msgpack using nlohmann::json
-    nlohmann::json j = nlohmann::json::from_msgpack(ReceivedBytes.GetData());
-    auto dumped = j.dump();
-    UE_LOG(LogTemp, Log, TEXT("AimationWebSocket received message: %s"), *FString(dumped.c_str()));
-    //// Deserialize the MessagePack object using RPCLIB_MSGPACK
-    //clmdep_msgpack::zone z;
-    //clmdep_msgpack::object_handle oh = clmdep_msgpack::unpack(ReceivedBytes.GetData(), ReceivedBytes.Num(), &z);
+    if (isLastFragment)
+    {
+        constexpr bool G_ALLOW_JSON_EXCEPTIONS{ false };
+        nlohmann::json j = nlohmann::json::from_msgpack(m_receiveBuffer.GetData(), true, G_ALLOW_JSON_EXCEPTIONS);
+        checkf(!j.is_discarded(), TEXT("AimationWebSocket received failed to turn msgpack buffer into json object"));
 
-    //// Assuming the deserialization was successful
-    //const clmdep_msgpack::object& msgpackObject = oh.get();
+        if (j.contains("HandlerID"))
+        {
+            uint32 handlerID = j["HandlerID"];
+            if (m_receivedPacketHandlers.Contains(handlerID))
+            {
+                auto contents = j.dump();
+                FString out{ contents.c_str() };
 
-    //// Convert the MessagePack object to an Unreal JsonObject
-    //FJsonObject JsonObject;
+                m_receivedPacketHandlers[handlerID](out);
+            }
+        }
 
-    //// Use the appropriate serialization function based on the content of msgpackObject
-    //msgpackObject.msgpack_object(&JsonObject, z);
+        // clear the array without resizing the buffer, as resizing can change the layout of message pack and crash
+        m_receiveBuffer.Reset();
+    }
+}
+
+void UAimationWebSocket::OnRegisterEngineConnectorPacket(const FRegisterEngineConnectorResponsePacket& packet)
+{
+    UE_LOG(LogTemp, Log, TEXT("AimationWebSocket received FRegisterEngineConnectorResponsePacket with status code: %d"), packet.Code);
 }

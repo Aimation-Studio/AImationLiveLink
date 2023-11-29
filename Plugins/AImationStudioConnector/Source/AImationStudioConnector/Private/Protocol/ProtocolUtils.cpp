@@ -1,5 +1,5 @@
 
-#include "Utils2.h"
+#include "Protocol/ProtocolUtils.h"
 
 #include <Containers/StringConv.h>
 #include <Containers/UnrealString.h>
@@ -62,56 +62,56 @@ bool AimationHelpers::PacketToStringImpl(const UStruct* StructDefinition, const 
     TSharedRef<FJsonObject> JsonObject = MakeShared<FJsonObject>();
     //UStructToJsonObject(StructDefinition, Struct, JsonObject, CheckFlags, SkipFlags, nullptr);
 
-	if (SkipFlags == 0)
-	{
-		// If we have no specified skip flags, skip deprecated, transient and skip serialization by default when writing
-		SkipFlags |= CPF_Deprecated | CPF_Transient;
-	}
+    if (SkipFlags == 0)
+    {
+        // If we have no specified skip flags, skip deprecated, transient and skip serialization by default when writing
+        SkipFlags |= CPF_Deprecated | CPF_Transient;
+    }
 
-	if (StructDefinition == FJsonObjectWrapper::StaticStruct())
-	{
-		// Just copy it into the object
-		const FJsonObjectWrapper* ProxyObject = (const FJsonObjectWrapper*)Struct;
+    if (StructDefinition == FJsonObjectWrapper::StaticStruct())
+    {
+        // Just copy it into the object
+        const FJsonObjectWrapper* ProxyObject = (const FJsonObjectWrapper*)Struct;
 
-		if (ProxyObject->JsonObject.IsValid())
-		{
-			JsonObject->Values = ProxyObject->JsonObject->Values;
-		}
-		return true;
-	}
+        if (ProxyObject->JsonObject.IsValid())
+        {
+            JsonObject->Values = ProxyObject->JsonObject->Values;
+        }
+        return true;
+    }
 
-	for (TFieldIterator<FProperty> It(StructDefinition); It; ++It)
-	{
-		FProperty* Property = *It;
+    for (TFieldIterator<FProperty> It(StructDefinition); It; ++It)
+    {
+        FProperty* Property = *It;
 
-		// Check to see if we should ignore this property
-		if (CheckFlags != 0 && !Property->HasAnyPropertyFlags(CheckFlags))
-		{
-			continue;
-		}
-		if (Property->HasAnyPropertyFlags(SkipFlags))
-		{
-			continue;
-		}
+        // Check to see if we should ignore this property
+        if (CheckFlags != 0 && !Property->HasAnyPropertyFlags(CheckFlags))
+        {
+            continue;
+        }
+        if (Property->HasAnyPropertyFlags(SkipFlags))
+        {
+            continue;
+        }
 
-		FString VariableName = Property->GetAuthoredName();
-		const void* Value = Property->ContainerPtrToValuePtr<uint8>(Struct);
+        FString VariableName = Property->GetAuthoredName();
+        const void* Value = Property->ContainerPtrToValuePtr<uint8>(Struct);
 
-		// convert the property to a FJsonValue
-		TSharedPtr<FJsonValue> JsonValue = FJsonObjectConverter::UPropertyToJsonValue(Property, Value, CheckFlags, SkipFlags, nullptr);
-		if (!JsonValue.IsValid())
-		{
-			FFieldClass* PropClass = Property->GetClass();
-			UE_LOG(LogTemp, Error, TEXT("UStructToJsonObject - Unhandled property type '%s': %s"), *PropClass->GetName(), *Property->GetPathName());
-			return false;
-		}
+        // convert the property to a FJsonValue
+        TSharedPtr<FJsonValue> JsonValue = FJsonObjectConverter::UPropertyToJsonValue(Property, Value, CheckFlags, SkipFlags, nullptr);
+        if (!JsonValue.IsValid())
+        {
+            FFieldClass* PropClass = Property->GetClass();
+            UE_LOG(LogTemp, Error, TEXT("UStructToJsonObject - Unhandled property type '%s': %s"), *PropClass->GetName(), *Property->GetPathName());
+            return false;
+        }
 
-		// set the value on the output object
-		JsonObject->Values.Add(VariableName, JsonValue);
-	}
+        // set the value on the output object
+        JsonObject->Values.Add(VariableName, JsonValue);
+    }
 
-	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>> > JsonWriter = TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutJsonString, Indent);
-	bool bSuccess = FJsonSerializer::Serialize(JsonObject, JsonWriter);
-	JsonWriter->Close();
-	return bSuccess;
+    TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>> > JsonWriter = TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&OutJsonString, Indent);
+    bool bSuccess = FJsonSerializer::Serialize(JsonObject, JsonWriter);
+    JsonWriter->Close();
+    return bSuccess;
 }

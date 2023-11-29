@@ -5,15 +5,12 @@
 #include "CoreMinimal.h"
 #include "WebSocketsModule.h"
 #include "IWebSocket.h"
-#include "JsonUtilities.h" // Include for JSON serialization
+#include "Protocol/ProtocolUtils.h"
 #include <Containers/UnrealString.h>
-#include <Delegates/DelegateCombinations.h>
-//#include "AimationWebSocket.generated.h"
 
-//DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnBinaryMessageReceived, const FString&, JsonData);
+struct FRegisterEngineConnectorResponsePacket;
 
-//UCLASS()
-class AIMATIONSTUDIOCONNECTOR_API UAimationWebSocket/* : public UObject*/
+class AIMATIONSTUDIOCONNECTOR_API UAimationWebSocket : public PacketHandlerMgr
 {
     //GENERATED_BODY()
 public:
@@ -30,10 +27,12 @@ public:
     //FOnBinaryMessageReceived OnBinaryMessageReceived;
 
     template< typename T >
-    inline void SendPacket( T & packet );
+    inline void SendPacket(T& packet);
 private:
     TSharedPtr<IWebSocket> WebSocket;
     TArray<uint8> m_receiveBuffer;
 
     void OnBinaryMessage(const void* InData, SIZE_T InSize, bool isLastFragment);
+protected:
+    void OnRegisterEngineConnectorPacket( const FRegisterEngineConnectorResponsePacket& packet );
 };
