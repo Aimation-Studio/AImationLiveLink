@@ -41,6 +41,7 @@ public class AImationStudioConnector : ModuleRules
 			{
 				"CoreUObject",
 				"Engine",
+                "UnrealEd",
 				"Slate",
 				"SlateCore",
                 "LiveLinkInterface",

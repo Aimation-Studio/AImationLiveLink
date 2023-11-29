@@ -15,7 +15,7 @@ struct FRegisterEngineConnectorPacket
         uint32 HandlerID = 14;
 
     UPROPERTY()
-        FString EngineName = "Unreal Engine";
+        FString ClientName = "Unreal Engine";
 };
 
 UENUM()
@@ -50,4 +50,14 @@ public:
 
     UPROPERTY()
         FString EngineName = "Unreal Engine";
+};
+
+USTRUCT()
+struct FUnregisterEngineConnectorResponsePacket
+{
+    GENERATED_BODY()
+public:
+
+    UPROPERTY()
+        uint32 HandlerID = 16;
 };

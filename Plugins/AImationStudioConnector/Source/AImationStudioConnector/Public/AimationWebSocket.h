@@ -17,22 +17,29 @@ public:
     UAimationWebSocket();
     ~UAimationWebSocket();
 
-    void Connect(const FString& InUrl);
+    bool Connect(const FString& InUrl);
     void Disconnect();
-    void OnConnected();
-    void OnConnectionError(const FString& Error);
-    void OnClosed(int32 StatusCode, const FString& Reason, bool bWasClean);
-    void OnMessage(const FString& Message);
     inline bool IsConnected() const { return WebSocket.IsValid() && WebSocket->IsConnected(); }
-    //FOnBinaryMessageReceived OnBinaryMessageReceived;
+
+    auto& OnBinaryMessageDelegate() { return WebSocket->OnBinaryMessage(); }
+    auto & OnConnected() { return WebSocket->OnConnected(); }
+    auto & OnConnectionError() { return WebSocket->OnConnectionError(); }
+    auto & OnClosed() { return WebSocket->OnClosed(); }
+    auto & OnMessage() { return WebSocket->OnMessage(); }
 
     template< typename T >
-    inline void SendPacket(T& packet);
+    FORCEINLINE void SendPacket(T& packet)
+    {
+        FString out{};
+        AimationHelpers::PacketToString(packet, out, 0, 0, 0);
+        auto registerEnginePkt = AimationHelpers::CreateAimationPacket(out);
+        WebSocket->Send(registerEnginePkt.GetData(), registerEnginePkt.Num(), true);
+    }
+
 private:
     TSharedPtr<IWebSocket> WebSocket;
     TArray<uint8> m_receiveBuffer;
 
-    void OnBinaryMessage(const void* InData, SIZE_T InSize, bool isLastFragment);
 protected:
-    void OnRegisterEngineConnectorPacket( const FRegisterEngineConnectorResponsePacket& packet );
+    void OnBinaryMessage(const void* InData, SIZE_T InSize, bool isLastFragment);
 };

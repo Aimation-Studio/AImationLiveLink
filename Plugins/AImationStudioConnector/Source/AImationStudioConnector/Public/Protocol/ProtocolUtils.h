@@ -72,7 +72,6 @@ public:
 
         if (m_receivedPacketHandlers.Contains(handlerId))
         {
-            UE_LOG(LogTemp, Warning, TEXT("Packet handler for %d already registered"), handlerId);
             checkf(false, TEXT("Packet handler for %d already registered"), handlerId);
         }
 
