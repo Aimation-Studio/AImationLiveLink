@@ -9,16 +9,16 @@
 #include <Roles/LiveLinkAnimationRole.h>
 #include <ILiveLinkClient.h>
 
-AimationLiveLinkSource::AimationLiveLinkSource() : ILiveLinkSource()
-, m_webSocket(UAimationWebSocket{})
+AimationLiveLinkSource::AimationLiveLinkSource( FAimationLiveLinkSettings && settings )
+    : ILiveLinkSource()
+    , m_connectionSettings(settings)
+    , m_webSocket(UAimationWebSocket{})
 {
     m_webSocket.RegisterPacketHandler< FRegisterEngineConnectorResponsePacket >(this, &AimationLiveLinkSource::OnRegisterEngineConnectorPacket);
 }
 
 AimationLiveLinkSource::~AimationLiveLinkSource()
 {
-    if (GEditor->IsTimerManagerValid() && m_reconnectTimerHandle.IsValid())
-        GEditor->GetTimerManager()->ClearTimer(m_reconnectTimerHandle);
 }
 
 void AimationLiveLinkSource::ReceiveClient(ILiveLinkClient* InClient, FGuid InSourceGuid)
@@ -88,7 +88,9 @@ FText AimationLiveLinkSource::GetSourceType() const
 
 FText AimationLiveLinkSource::GetSourceMachineName() const
 {
-    return FText::FromString("LocalHost Windows");
+    FString IP = m_connectionSettings.IPAddress;
+    FString FirstThreeDigits = IP.Left(3);
+    return FText::FromString(FString::Printf(TEXT("IP: %s... Port: %d"), *FirstThreeDigits, m_connectionSettings.TCPPort));
 }
 
 FText AimationLiveLinkSource::GetSourceStatus() const
@@ -153,7 +155,7 @@ void AimationLiveLinkSource::Connect()
 {
     m_reconnectTimerHandle.Invalidate();
 
-    m_webSocket.Connect(m_socketURL);
+    m_webSocket.Connect( m_connectionSettings.BuildWebSocketURL() );
     m_webSocket.OnConnected().AddRaw(this, &AimationLiveLinkSource::OnConnected);
     m_webSocket.OnConnectionError().AddRaw(this, &AimationLiveLinkSource::OnConnectionError);
     m_webSocket.OnClosed().AddRaw(this, &AimationLiveLinkSource::OnClosed);

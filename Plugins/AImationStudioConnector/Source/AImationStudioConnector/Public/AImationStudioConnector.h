@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
-class FAImationStudioConnectorModule : public IModuleInterface
+class AIMATIONSTUDIOCONNECTOR_API FAImationStudioConnectorModule : public IModuleInterface
 {
 public:
 

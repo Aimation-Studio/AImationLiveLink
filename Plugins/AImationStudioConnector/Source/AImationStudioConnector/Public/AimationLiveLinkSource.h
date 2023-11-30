@@ -4,6 +4,7 @@
 #include "CoreMinimal.h"
 #include "ILiveLinkSource.h"
 #include "AimationWebSocket.h"
+#include "AimationLiveLinkSettings.h"
 
 struct FRegisterEngineConnectorResponsePacket;
 
@@ -18,7 +19,7 @@ enum class AImationConnectionStatus : uint8
 class AIMATIONSTUDIOCONNECTOR_API AimationLiveLinkSource : public ILiveLinkSource
 {
 public:
-    AimationLiveLinkSource();
+    AimationLiveLinkSource(FAimationLiveLinkSettings&& settings);
     ~AimationLiveLinkSource();
 
     void ReceiveClient(ILiveLinkClient* InClient, FGuid InSourceGuid) override;
@@ -42,7 +43,7 @@ private:
     void Connect();
     void StartReconnectTimer();
 
-    FString m_socketURL{ "ws://127.0.0.1:52693" };
+    FAimationLiveLinkSettings m_connectionSettings;
     UAimationWebSocket m_webSocket;
 
     AImationConnectionStatus m_linkConnectionStatus = AImationConnectionStatus::Disconnected;

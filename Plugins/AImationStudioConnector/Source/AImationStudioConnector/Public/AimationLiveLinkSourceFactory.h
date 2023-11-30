@@ -1,16 +1,14 @@
 
 #include "CoreMinimal.h"
-#include "Modules/ModuleManager.h"
 #include "LiveLinkSourceFactory.h"
-#include "Internationalization/Text.h"
-#include "Internationalization/Internationalization.h"
+#include "AimationLiveLinkSettings.h"
 
 #include "AimationLiveLinkSourceFactory.generated.h"
 
 class AimationLiveLinkSource;
 
 UCLASS()
-class UCustomLiveLinkSourceFactory : public ULiveLinkSourceFactory
+class AIMATIONSTUDIOCONNECTOR_API UCustomLiveLinkSourceFactory : public ULiveLinkSourceFactory
 {
     GENERATED_BODY()
 
@@ -28,15 +26,13 @@ public:
         return FText::FromString("Connects to AImation Studio.");
     }
 
-    EMenuType GetMenuType() const override { return EMenuType::MenuEntry; }
+    EMenuType GetMenuType() const override { return EMenuType::SubPanel; }
 
-    TSharedPtr<SWidget> BuildCreationPanel(FOnLiveLinkSourceCreated OnLiveLinkSourceCreated) const override
-    {
-        return TSharedPtr<SWidget>();
-    }
+    TSharedPtr<SWidget> BuildCreationPanel(FOnLiveLinkSourceCreated OnLiveLinkSourceCreated) const override;
 
     virtual TSharedPtr<ILiveLinkSource> CreateSource(const FString& ConnectionString) const override;
 
-    TSharedPtr< AimationLiveLinkSource > m_aimationSource = nullptr;
+private:
+    void OnLiveLinkSourceStartConnection(FAimationLiveLinkSettings, FOnLiveLinkSourceCreated) const;
 };
 

@@ -44,10 +44,12 @@ public class AImationStudioConnector : ModuleRules
                 "UnrealEd",
 				"Slate",
 				"SlateCore",
+                "InputCore",
                 "LiveLinkInterface",
                 "WebSockets",
                 "JsonUtilities",
                 "Json",
+                "Networking",
                 "nlohmann_json"
 				// ... add private dependencies that you statically link with here ...	
 			}
