@@ -98,10 +98,6 @@ FReply SAimationStudioLiveLinkConnectionWidget::OnConnectClicked()
 
 void SAimationStudioLiveLinkConnectionWidget::OnIPTextChanged(const FText& InText, ETextCommit::Type CommitType)
 {
-    //if (CommitType != ETextCommit::OnEnter)
-    //    return;
-
-    // You can implement IP address validation here if needed
     FString IP = InText.ToString();
     if (!IsIPValid(IP))
     {
@@ -119,7 +115,6 @@ void SAimationStudioLiveLinkConnectionWidget::OnPortValueChanged(uint32 NewValue
 
 bool SAimationStudioLiveLinkConnectionWidget::IsIPValid(const FString& IPAddress)
 {
-    // create ip address out of string to test if its valid ip address
     FIPv4Address IP;
     bool bIsValid = FIPv4Address::Parse(IPAddress, IP);
     return bIsValid;
