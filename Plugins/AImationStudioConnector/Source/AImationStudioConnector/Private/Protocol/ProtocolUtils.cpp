@@ -32,27 +32,22 @@ TArray<uint8> AimationHelpers::CreateAimationPacket(FString& json, uint32 header
     Writer.Serialize(MagicNumberBuffer.GetData(), MagicNumberBuffer.Num());
 
     Writer.Seek(16);
-    // Set block size to 1
     uint32 BlockSize = 1;
     Writer << BlockSize;
 
     Writer.Seek(24);
-    // Set default data type to 6 (header type)
-    uint32 HeaderType = 6;
-    Writer << HeaderType;
+    Writer << headerType;
 
     Writer.Seek(28);
-    // Set data start offset
     uint32 DataStartOffset = 36;
     Writer << DataStartOffset;
 
     Writer.Seek(32);
-    // Set data size
     uint32 EncodedLength = json.Len();
     Writer << EncodedLength;
 
     Writer.Seek(36);
-    // Append the JSON data to the packet
+    // Append the JSON data at the end of the packet
     Writer.Serialize(JsonBuffer.GetData(), JsonBuffer.Num());
     return packet;
 }

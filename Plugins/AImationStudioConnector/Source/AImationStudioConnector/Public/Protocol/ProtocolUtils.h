@@ -41,7 +41,7 @@ public:
     PacketHandlerMgr() = default;
 
     template <typename Packet, typename U>
-    typename TEnableIf<TIsSame<decltype(Packet::HandlerID), uint32>::Value>::Type
+    typename TEnableIf<std::is_same_v<decltype(Packet::HandlerID), uint32>>::Type
         RegisterPacketHandler(U* self, detail::MemberFunction<U, Packet const&> callback)
     {
         uint32 handlerId = Packet{}.HandlerID;

@@ -40,6 +40,7 @@ protected:
     void OnRegisterEngineConnectorPacket(const FRegisterEngineConnectorResponsePacket& packet);
 private:
     void Connect();
+    void StartReconnectTimer();
 
     FString m_socketURL{ "ws://127.0.0.1:52693" };
     UAimationWebSocket m_webSocket;
@@ -50,4 +51,12 @@ private:
 
     ILiveLinkClient* m_liveLinkClient{ nullptr };
     FGuid m_sourceGuid{ };
+
+    void CreateAndAddAimationSubject();
+    FName const m_bodySubjectName{ "Body" };
+    FName const m_rightHandSubjectName{ "Left Hand" };
+    FName const m_leftHandSubjectName{ "Right Hand" };
+    FLiveLinkSubjectKey m_bodySubjectKey{ };
+    FLiveLinkSubjectKey m_leftHandSubjectKey{ };
+    FLiveLinkSubjectKey m_rightHandSubjectKey{ };
 };
