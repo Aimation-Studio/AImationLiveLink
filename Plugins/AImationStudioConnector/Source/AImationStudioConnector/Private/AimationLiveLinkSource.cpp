@@ -8,13 +8,14 @@
 #include <Roles/LiveLinkAnimationTypes.h>
 #include <Roles/LiveLinkAnimationRole.h>
 #include <ILiveLinkClient.h>
+#include "Protocol/RegisterBodySubject.h"
 
 AimationLiveLinkSource::AimationLiveLinkSource( FAimationLiveLinkSettings && settings )
     : ILiveLinkSource()
     , m_connectionSettings(settings)
     , m_webSocket(UAimationWebSocket{})
 {
-    m_webSocket.RegisterPacketHandler< FRegisterEngineConnectorResponsePacket >(this, &AimationLiveLinkSource::OnRegisterEngineConnectorPacket);
+    m_webSocket.RegisterPacketHandler< FRegisterEngineConnectorResponsePacket >(this, &AimationLiveLinkSource::OnRegisterEngineResponse);
 }
 
 AimationLiveLinkSource::~AimationLiveLinkSource()
@@ -32,7 +33,6 @@ void AimationLiveLinkSource::ReceiveClient(ILiveLinkClient* InClient, FGuid InSo
         packet.ClientName = "Unreal Engine 5.3";
 
         m_webSocket.SendPacket(packet);
-        CreateAndAddAimationSubject();
     }
     else if (m_linkConnectionStatus == AImationConnectionStatus::Disconnected)
     {
@@ -57,7 +57,6 @@ bool AimationLiveLinkSource::CanBeDisplayedInUI() const
 bool AimationLiveLinkSource::IsSourceStillValid() const
 {
     return true;
-
 }
 
 bool AimationLiveLinkSource::RequestSourceShutdown()
@@ -95,11 +94,11 @@ FText AimationLiveLinkSource::GetSourceMachineName() const
 
 FText AimationLiveLinkSource::GetSourceStatus() const
 {
-    if (m_webSocket.IsConnected())
-        return FText::FromString("Connected");
-
     if (m_linkConnectionStatus == AImationConnectionStatus::Connecting)
         return FText::FromString("Connecting");
+
+    if (m_webSocket.IsConnected())
+        return FText::FromString("Connected");
 
     if (m_linkConnectionStatus == AImationConnectionStatus::Failed)
         return FText::FromString("Failed: " + m_disconnectedReason);
@@ -116,10 +115,7 @@ void AimationLiveLinkSource::OnConnected()
     {
         FRegisterEngineConnectorPacket packet{};
         packet.ClientName = "Unreal Engine 5.3";
-
         m_webSocket.SendPacket(packet);
-
-        CreateAndAddAimationSubject();
     }
 }
 
@@ -155,7 +151,7 @@ void AimationLiveLinkSource::Connect()
 {
     m_reconnectTimerHandle.Invalidate();
 
-    m_webSocket.Connect( m_connectionSettings.BuildWebSocketURL() );
+    m_webSocket.Connect(m_connectionSettings.BuildWebSocketURL());
     m_webSocket.OnConnected().AddRaw(this, &AimationLiveLinkSource::OnConnected);
     m_webSocket.OnConnectionError().AddRaw(this, &AimationLiveLinkSource::OnConnectionError);
     m_webSocket.OnClosed().AddRaw(this, &AimationLiveLinkSource::OnClosed);
@@ -185,40 +181,37 @@ void AimationLiveLinkSource::StartReconnectTimer()
     }
 }
 
-void AimationLiveLinkSource::CreateAndAddAimationSubject()
+void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConnectorResponsePacket& packet)
 {
-    if (m_liveLinkClient)
+    m_bodySubjectKey = { m_sourceGuid, m_bodySubjectName };
+    m_leftHandSubjectKey = { m_sourceGuid, m_rightHandSubjectName };
+    m_rightHandSubjectKey = { m_sourceGuid, m_leftHandSubjectName };
+
+    auto poseType = packet.AimationPose;
+
+    FLiveLinkStaticDataStruct baseData;
+    baseData.InitializeWith(FLiveLinkSkeletonStaticData::StaticStruct(), nullptr);
+    FLiveLinkSkeletonStaticData* skeletal = baseData.Cast<FLiveLinkSkeletonStaticData>();
+    check(skeletal);
+    // TODO: add bone names
+
+    FLiveLinkStaticDataStruct bodyData;
+    FLiveLinkStaticDataStruct leftHandData;
+    FLiveLinkStaticDataStruct rightHandData;
+    bodyData.InitializeWith(baseData);
+    leftHandData.InitializeWith(baseData);
+    rightHandData.InitializeWith(baseData);
+
+    m_liveLinkClient->RemoveSubject_AnyThread(m_bodySubjectKey);
+    m_liveLinkClient->RemoveSubject_AnyThread(m_leftHandSubjectKey);
+    m_liveLinkClient->RemoveSubject_AnyThread(m_rightHandSubjectKey);
+
+    m_linkConnectionStatus = AImationConnectionStatus::Connected;
+    m_liveLinkClient->PushSubjectStaticData_AnyThread(m_bodySubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(bodyData));
+    if (poseType != PoseType::BasePose)
     {
-        m_bodySubjectKey = { m_sourceGuid, m_bodySubjectName };
-        m_leftHandSubjectKey = { m_sourceGuid, m_rightHandSubjectName };
-        m_rightHandSubjectKey = { m_sourceGuid, m_leftHandSubjectName };
-
-        FLiveLinkStaticDataStruct baseData;
-        baseData.InitializeWith(FLiveLinkSkeletonStaticData::StaticStruct(), nullptr);
-        FLiveLinkSkeletonStaticData* skeletal = baseData.Cast<FLiveLinkSkeletonStaticData>();
-        check(skeletal);
-        // TODO: add bone names
-
-
-        FLiveLinkStaticDataStruct bodyData;
-        FLiveLinkStaticDataStruct leftHandData;
-        FLiveLinkStaticDataStruct rightHandData;
-        bodyData.InitializeWith(baseData);
-        leftHandData.InitializeWith(baseData);
-        rightHandData.InitializeWith(baseData);
-
-        m_liveLinkClient->RemoveSubject_AnyThread(m_bodySubjectKey);
-        m_liveLinkClient->RemoveSubject_AnyThread(m_leftHandSubjectKey);
-        m_liveLinkClient->RemoveSubject_AnyThread(m_rightHandSubjectKey);
-
-        m_liveLinkClient->PushSubjectStaticData_AnyThread(m_bodySubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(bodyData));
         m_liveLinkClient->PushSubjectStaticData_AnyThread(m_leftHandSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(leftHandData));
         m_liveLinkClient->PushSubjectStaticData_AnyThread(m_rightHandSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(rightHandData));
     }
-}
-
-void AimationLiveLinkSource::OnRegisterEngineConnectorPacket(const FRegisterEngineConnectorResponsePacket& packet)
-{
-    m_linkConnectionStatus = AImationConnectionStatus::Connected;
 }
 

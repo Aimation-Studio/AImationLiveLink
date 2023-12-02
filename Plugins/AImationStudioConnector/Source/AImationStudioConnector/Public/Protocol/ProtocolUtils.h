@@ -45,7 +45,6 @@ public:
         RegisterPacketHandler(U* self, detail::MemberFunction<U, Packet const&> callback)
     {
         uint32 handlerId = Packet{}.HandlerID;
-
         auto handler = [self, callback, _handlerId = handlerId](FString const& msg)
         {
             try
@@ -70,14 +69,14 @@ public:
             }
         };
 
-        if (m_receivedPacketHandlers.Contains(handlerId))
+        if (m_handlers.Contains(handlerId))
         {
             checkf(false, TEXT("Packet handler for %d already registered"), handlerId);
         }
 
-        m_receivedPacketHandlers.Add(handlerId, std::move(handler));
+        m_handlers.Add(handlerId, std::move(handler));
     }
 
 protected:
-    TMap<uint32, TFunction<bool(FString const&)>> m_receivedPacketHandlers;
+    TMap<uint32, TFunction<bool(FString const&)>> m_handlers;
 };

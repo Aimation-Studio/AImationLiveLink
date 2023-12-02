@@ -16,6 +16,9 @@ struct FRegisterEngineConnectorPacket
 
     UPROPERTY()
         FString ClientName = "Unreal Engine";
+
+    UPROPERTY()
+        uint32 EngineConnectorType = 0; // maps to EngineConnectorType enum in AimationStudio
 };
 
 UENUM()
@@ -24,6 +27,13 @@ enum class ResponseCode : uint32
     Success = 0,
     ConnectorWithNameExists = 1,
     UnknownFailure = 2
+};
+
+UENUM()
+enum class PoseType : uint32
+{
+    BasePose = 0,
+    AdvancedHandsPose = 1
 };
 
 USTRUCT()
@@ -36,7 +46,10 @@ public:
         uint32 HandlerID = 15;
 
     UPROPERTY()
-        ResponseCode Code = ResponseCode::Success;
+        ResponseCode Response = ResponseCode::Success;
+
+    UPROPERTY()
+        PoseType AimationPose = PoseType::BasePose;
 };
 
 USTRUCT()
@@ -46,7 +59,7 @@ struct FUnregisterEngineConnectorPacket
 public:
 
     UPROPERTY()
-        uint32 HandlerID = 15;
+        uint32 HandlerID = 10000000;
 
     UPROPERTY()
         FString EngineName = "Unreal Engine";
@@ -59,5 +72,5 @@ struct FUnregisterEngineConnectorResponsePacket
 public:
 
     UPROPERTY()
-        uint32 HandlerID = 16;
+        uint32 HandlerID = 160000;
 };

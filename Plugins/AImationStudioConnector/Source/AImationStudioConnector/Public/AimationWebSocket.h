@@ -38,7 +38,7 @@ public:
 
 private:
     TSharedPtr<IWebSocket> WebSocket;
-    TArray<uint8> m_receiveBuffer;
+    std::vector<uint8> m_receiveBuffer;
 
 protected:
     void OnBinaryMessage(const void* InData, SIZE_T InSize, bool isLastFragment);

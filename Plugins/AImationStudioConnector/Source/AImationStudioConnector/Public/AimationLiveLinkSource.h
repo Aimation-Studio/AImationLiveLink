@@ -7,6 +7,7 @@
 #include "AimationLiveLinkSettings.h"
 
 struct FRegisterEngineConnectorResponsePacket;
+struct FRegisterBodySubjectServerPacket;
 
 enum class AImationConnectionStatus : uint8
 {
@@ -38,7 +39,7 @@ protected:
     void OnClosed(int32 StatusCode, const FString& Reason, bool bWasClean);
     void OnMessage(const FString& Message);
 
-    void OnRegisterEngineConnectorPacket(const FRegisterEngineConnectorResponsePacket& packet);
+    void OnRegisterEngineResponse(const FRegisterEngineConnectorResponsePacket& packet);
 private:
     void Connect();
     void StartReconnectTimer();
@@ -53,10 +54,9 @@ private:
     ILiveLinkClient* m_liveLinkClient{ nullptr };
     FGuid m_sourceGuid{ };
 
-    void CreateAndAddAimationSubject();
     FName const m_bodySubjectName{ "Body" };
-    FName const m_rightHandSubjectName{ "Left Hand" };
-    FName const m_leftHandSubjectName{ "Right Hand" };
+    FName const m_rightHandSubjectName{ "Right Hand" };
+    FName const m_leftHandSubjectName{ "Left Hand" };
     FLiveLinkSubjectKey m_bodySubjectKey{ };
     FLiveLinkSubjectKey m_leftHandSubjectKey{ };
     FLiveLinkSubjectKey m_rightHandSubjectKey{ };

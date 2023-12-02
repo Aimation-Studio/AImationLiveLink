@@ -12,9 +12,9 @@ TArray<uint8> AimationHelpers::CreateAimationPacket(FString& json, uint32 header
 {
     // Convert MagicNumber to UTF-8
     int32 MagicNumberUtf8Length = FTCHARToUTF8_Convert::ConvertedLength(TEXT("AiMation"), 8);
-    TArray<uint8> MagicNumberBuffer;
-    MagicNumberBuffer.SetNumUninitialized(MagicNumberUtf8Length);
-    FTCHARToUTF8_Convert::Convert(reinterpret_cast<UTF8CHAR*>(MagicNumberBuffer.GetData()), MagicNumberBuffer.Num(), TEXT("AiMation"), 8);
+    TArray<uint8> AimationHeaderMagicNumber;
+    AimationHeaderMagicNumber.SetNumUninitialized(MagicNumberUtf8Length);
+    FTCHARToUTF8_Convert::Convert(reinterpret_cast<UTF8CHAR*>(AimationHeaderMagicNumber.GetData()), AimationHeaderMagicNumber.Num(), TEXT("AiMation"), 8);
 
     // Convert FString to UTF-8
     int32 Utf8Length = FTCHARToUTF8_Convert::ConvertedLength(*json, json.Len());
@@ -29,7 +29,9 @@ TArray<uint8> AimationHelpers::CreateAimationPacket(FString& json, uint32 header
 
     FMemoryWriter Writer(packet, false);
 
-    Writer.Serialize(MagicNumberBuffer.GetData(), MagicNumberBuffer.Num());
+    Writer.Serialize(AimationHeaderMagicNumber.GetData(), AimationHeaderMagicNumber.Num());
+    uint32 AbiVersion = 0;
+    Writer << AbiVersion;
 
     Writer.Seek(16);
     uint32 BlockSize = 1;
