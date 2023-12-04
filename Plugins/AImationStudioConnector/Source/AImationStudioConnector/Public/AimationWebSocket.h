@@ -12,15 +12,13 @@ struct FRegisterEngineConnectorResponsePacket;
 
 class AIMATIONSTUDIOCONNECTOR_API UAimationWebSocket : public PacketHandlerMgr
 {
-    //GENERATED_BODY()
 public:
     UAimationWebSocket();
     ~UAimationWebSocket();
 
     bool Connect(const FString& InUrl);
-    void Disconnect();
+    bool Disconnect();
     inline bool IsConnected() const { return WebSocket.IsValid() && WebSocket->IsConnected(); }
-
     auto& OnBinaryMessageDelegate() { return WebSocket->OnBinaryMessage(); }
     auto & OnConnected() { return WebSocket->OnConnected(); }
     auto & OnConnectionError() { return WebSocket->OnConnectionError(); }

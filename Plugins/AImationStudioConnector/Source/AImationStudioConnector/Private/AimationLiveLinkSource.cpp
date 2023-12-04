@@ -3,19 +3,22 @@
 
 #include "AImationStudioConnector.h"
 #include "AimationWebSocket.h"
+#include "Protocol/RegisterBodySubject.h"
 #include "Protocol/RegisterEngineConnector.h"
 #include <Editor/EditorEngine.h>
-#include <Roles/LiveLinkAnimationTypes.h>
-#include <Roles/LiveLinkAnimationRole.h>
 #include <ILiveLinkClient.h>
-#include "Protocol/RegisterBodySubject.h"
+#include <Roles/LiveLinkAnimationRole.h>
+#include <Roles/LiveLinkAnimationTypes.h>
+#include "estimators/BoneData.h"
+#include "Protocol/TrackStreamingPackets.h"
 
-AimationLiveLinkSource::AimationLiveLinkSource( FAimationLiveLinkSettings && settings )
+AimationLiveLinkSource::AimationLiveLinkSource(FAimationConnectionSettings&& settings)
     : ILiveLinkSource()
     , m_connectionSettings(settings)
-    , m_webSocket(UAimationWebSocket{})
+    , m_socket(MakeUnique<UAimationWebSocket>())
 {
-    m_webSocket.RegisterPacketHandler< FRegisterEngineConnectorResponsePacket >(this, &AimationLiveLinkSource::OnRegisterEngineResponse);
+    m_socket->RegisterPacketHandler< FRegisterEngineConnectorResponsePacket >(this, &AimationLiveLinkSource::OnRegisterEngineResponse);
+    m_socket->RegisterPacketHandler< FAimationFrameData >(this, &AimationLiveLinkSource::OnReceiveTrackData);
 }
 
 AimationLiveLinkSource::~AimationLiveLinkSource()
@@ -27,22 +30,14 @@ void AimationLiveLinkSource::ReceiveClient(ILiveLinkClient* InClient, FGuid InSo
     m_liveLinkClient = InClient;
     m_sourceGuid = InSourceGuid;
 
-    if (m_webSocket.IsConnected())
-    {
-        FRegisterEngineConnectorPacket packet{};
-        packet.ClientName = "Unreal Engine 5.3";
-
-        m_webSocket.SendPacket(packet);
-    }
-    else if (m_linkConnectionStatus == AImationConnectionStatus::Disconnected)
-    {
-        Connect();
-    }
+    checkf(!m_isClosed, TEXT("AimationLiveLinkSource ReceiveClient called after source was closed"));
+    Connect();
 }
 
 void AimationLiveLinkSource::InitializeSettings(ULiveLinkSourceSettings* Settings)
 {
-
+    UE_LOG(LogTemp, Warning, TEXT("AimationLiveLinkSource::InitializeSettings"));
+    m_liveLinkSettings = Cast<UAimationLiveLinkSettings>(Settings);
 }
 
 void AimationLiveLinkSource::Update()
@@ -56,28 +51,23 @@ bool AimationLiveLinkSource::CanBeDisplayedInUI() const
 
 bool AimationLiveLinkSource::IsSourceStillValid() const
 {
-    return true;
+    return !m_isClosed;
 }
 
 bool AimationLiveLinkSource::RequestSourceShutdown()
 {
-    if (m_liveLinkClient)
+    if (!m_isClosing)
     {
-        m_liveLinkClient = nullptr;
-        m_sourceGuid.Invalidate();
+        m_isClosing = true;
+        // if we failed to close the socket, we can destroy right away
+        if (!m_socket->Disconnect())
+        {
+            m_isClosed = true;
+            return true;
+        }
     }
 
-    if (m_webSocket.IsConnected())
-    {
-        m_webSocket.OnConnected().RemoveAll(this);
-        m_webSocket.OnConnectionError().RemoveAll(this);
-        m_webSocket.OnClosed().RemoveAll(this);
-
-        m_webSocket.Disconnect();
-        m_linkConnectionStatus = AImationConnectionStatus::Disconnected;
-    }
-
-    return true;
+    return m_isClosed;
 }
 
 FText AimationLiveLinkSource::GetSourceType() const
@@ -87,59 +77,56 @@ FText AimationLiveLinkSource::GetSourceType() const
 
 FText AimationLiveLinkSource::GetSourceMachineName() const
 {
-    FString IP = m_connectionSettings.IPAddress;
-    FString FirstThreeDigits = IP.Left(3);
-    return FText::FromString(FString::Printf(TEXT("IP: %s... Port: %d"), *FirstThreeDigits, m_connectionSettings.TCPPort));
+    return FText::FromString(FString::Printf(TEXT("Windows @ Port: %d"), m_connectionSettings.TCPPort));
 }
 
 FText AimationLiveLinkSource::GetSourceStatus() const
 {
-    if (m_linkConnectionStatus == AImationConnectionStatus::Connecting)
+    if (m_isClosed)
+        return FText::FromString("Disconnected");
+    else if (m_isClosing)
+        return FText::FromString("Disconnecting");
+    else if (!m_socket->IsConnected())
         return FText::FromString("Connecting");
 
-    if (m_webSocket.IsConnected())
-        return FText::FromString("Connected");
-
-    if (m_linkConnectionStatus == AImationConnectionStatus::Failed)
-        return FText::FromString("Failed: " + m_disconnectedReason);
-
-    return FText::FromString("Disconnected");
+    return FText::FromString("Connected");
 }
 
 void AimationLiveLinkSource::OnConnected()
 {
-    m_linkConnectionStatus = AImationConnectionStatus::Connected;
+    // we might connect while we were asked to be destroyed, skip if so
+    if (m_isClosing)
+        return;
 
-    // if client exists then we connected after client was set, we need to register with aimation studio now
-    if (m_liveLinkClient)
-    {
-        FRegisterEngineConnectorPacket packet{};
-        packet.ClientName = "Unreal Engine 5.3";
-        m_webSocket.SendPacket(packet);
-    }
+    // we will await a response packet from aimation now
+    FRegisterEngineConnectorPacket packet{};
+    packet.ClientName = "Unreal Engine 5.3";
+    m_socket->SendPacket(packet);
 }
 
 void AimationLiveLinkSource::OnConnectionError(const FString& Error)
 {
-    m_linkConnectionStatus = AImationConnectionStatus::Failed;
-    m_disconnectedReason = Error;
-
-    StartReconnectTimer();
+    UE_LOG(LogTemp, Warning, TEXT("AimationLiveLinkSource connection error: %s"), *Error);
+    OnSocketClose();
 }
 
 void AimationLiveLinkSource::OnClosed(int32 StatusCode, const FString& Reason, bool bWasClean)
 {
-    if (m_liveLinkClient)
+    UE_LOG(LogTemp, Warning, TEXT("AimationLiveLinkSource socket called OnClose. ( StatusCode: %d, Reason: %s, bWasClean: %d )"), StatusCode, *Reason, bWasClean);
+    OnSocketClose();
+}
+
+void AimationLiveLinkSource::OnSocketClose()
+{
+    if (m_isClosed)
+        return;
+
+    m_isClosed = true;
+    if (!m_isClosing)
     {
-        m_liveLinkClient->RemoveSubject_AnyThread(m_bodySubjectKey);
-        m_liveLinkClient->RemoveSubject_AnyThread(m_leftHandSubjectKey);
-        m_liveLinkClient->RemoveSubject_AnyThread(m_rightHandSubjectKey);
+        UE_LOG(LogTemp, Warning, TEXT("AimationLiveLinkSource closed unexpectedly."));
+        StartReconnectTimer();
     }
-
-    m_linkConnectionStatus = AImationConnectionStatus::Disconnected;
-    m_disconnectedReason = Reason;
-
-    StartReconnectTimer();
 }
 
 void AimationLiveLinkSource::OnMessage(const FString& Message)
@@ -149,20 +136,33 @@ void AimationLiveLinkSource::OnMessage(const FString& Message)
 
 void AimationLiveLinkSource::Connect()
 {
-    m_reconnectTimerHandle.Invalidate();
+    if (m_isClosing)
+        return;
 
-    m_webSocket.Connect(m_connectionSettings.BuildWebSocketURL());
-    m_webSocket.OnConnected().AddRaw(this, &AimationLiveLinkSource::OnConnected);
-    m_webSocket.OnConnectionError().AddRaw(this, &AimationLiveLinkSource::OnConnectionError);
-    m_webSocket.OnClosed().AddRaw(this, &AimationLiveLinkSource::OnClosed);
-
-    m_linkConnectionStatus = AImationConnectionStatus::Connecting;
+    if (m_socket->Connect(m_connectionSettings.BuildWebSocketURL()))
+    {
+        m_isClosed = false;
+        // if we are not bound to one, we are not bound to any
+        if (!m_socket->OnConnected().IsBoundToObject(this))
+        {
+            m_socket->OnConnected().AddRaw(this, &AimationLiveLinkSource::OnConnected);
+            m_socket->OnConnectionError().AddRaw(this, &AimationLiveLinkSource::OnConnectionError);
+            m_socket->OnClosed().AddRaw(this, &AimationLiveLinkSource::OnClosed);
+        }
+    }
+    else
+    {
+        StartReconnectTimer();
+    }
 }
 
 void AimationLiveLinkSource::StartReconnectTimer()
 {
-    if (GEditor->IsTimerManagerValid() && !m_reconnectTimerHandle.IsValid())
+    if (GEditor->IsTimerManagerValid())
     {
+        if (m_reconnectTimerHandle.IsValid())
+            GEditor->GetTimerManager()->ClearTimer(m_reconnectTimerHandle);
+
         UE_LOG(LogTemp, Log, TEXT("Starting reconnect to Aimation Studio, connect will fire in 5 seconds"));
         FTimerDelegate reconnectDelegate{};
         reconnectDelegate.BindRaw(this, &AimationLiveLinkSource::Connect);
@@ -175,43 +175,88 @@ void AimationLiveLinkSource::StartReconnectTimer()
             UE_LOG(LogTemp, Warning, TEXT("Failed to start reconnect timer, reconnect timer is already valid."));
         }
         else
-        {
             UE_LOG(LogTemp, Warning, TEXT("Failed to start reconnect timer, timer manager is not valid."));
-        }
     }
 }
 
 void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConnectorResponsePacket& packet)
 {
-    m_bodySubjectKey = { m_sourceGuid, m_bodySubjectName };
-    m_leftHandSubjectKey = { m_sourceGuid, m_rightHandSubjectName };
-    m_rightHandSubjectKey = { m_sourceGuid, m_leftHandSubjectName };
-
     auto poseType = packet.AimationPose;
-
-    FLiveLinkStaticDataStruct baseData;
-    baseData.InitializeWith(FLiveLinkSkeletonStaticData::StaticStruct(), nullptr);
-    FLiveLinkSkeletonStaticData* skeletal = baseData.Cast<FLiveLinkSkeletonStaticData>();
-    check(skeletal);
-    // TODO: add bone names
-
-    FLiveLinkStaticDataStruct bodyData;
-    FLiveLinkStaticDataStruct leftHandData;
-    FLiveLinkStaticDataStruct rightHandData;
-    bodyData.InitializeWith(baseData);
-    leftHandData.InitializeWith(baseData);
-    rightHandData.InitializeWith(baseData);
-
-    m_liveLinkClient->RemoveSubject_AnyThread(m_bodySubjectKey);
-    m_liveLinkClient->RemoveSubject_AnyThread(m_leftHandSubjectKey);
-    m_liveLinkClient->RemoveSubject_AnyThread(m_rightHandSubjectKey);
-
-    m_linkConnectionStatus = AImationConnectionStatus::Connected;
-    m_liveLinkClient->PushSubjectStaticData_AnyThread(m_bodySubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(bodyData));
-    if (poseType != PoseType::BasePose)
+    if (poseType != PoseType::AdvancedHandsPose)
     {
-        m_liveLinkClient->PushSubjectStaticData_AnyThread(m_leftHandSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(leftHandData));
-        m_liveLinkClient->PushSubjectStaticData_AnyThread(m_rightHandSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(rightHandData));
+        UE_LOG(LogTemp, Warning, TEXT("Aimation LiveLink only works with advanced pose."), static_cast<int32>(poseType));
+        return;
+    }
+
+    m_advancedPoseSubjectKey = { m_sourceGuid, m_bodySubjectName };
+
+    FLiveLinkStaticDataStruct advancedPoseData;
+    {
+        static FAImationBoneData bd{};
+        FLiveLinkStaticDataStruct baseData;
+        baseData.InitializeWith(FLiveLinkSkeletonStaticData::StaticStruct(), nullptr);
+        FLiveLinkSkeletonStaticData* skeletal = baseData.Cast<FLiveLinkSkeletonStaticData>();
+
+        TArray<FName>& BoneNames = skeletal->BoneNames;
+        BoneNames = bd.BoneNames;
+        // Array of bone indices to parent bone index
+        m_advancedPoseBoneParents.Reserve(BoneNames.Num());
+        m_advancedPoseBoneTransforms.Reserve(BoneNames.Num());
+
+        for ( int32 boneId = 0; boneId < BoneNames.Num(); ++boneId )
+        {
+            m_advancedPoseBoneParents.Add(-1);
+        }
+        //BoneParents.Reserve(BoneNames.Num());
+        //BoneKeypoints.Reserve(EHandKeypointCount);
+
+        // Manually build the parent hierarchy starting at the wrist which has no parent (-1)
+        //BoneParents.Add(1);		// Palm
+        //BoneParents.Add(-1);	// Wrist -> Palm
+
+        //BoneParents.Add(1);		// ThumbMetacarpal -> Wrist
+        //BoneParents.Add(2);		// ThumbProximal -> ThumbMetacarpal
+        //BoneParents.Add(3);		// ThumbDistal -> ThumbProximal
+        //BoneParents.Add(4);		// ThumbTip -> ThumbDistal
+
+        //BoneParents.Add(1);		// IndexMetacarpal -> Wrist
+        //BoneParents.Add(6);		// IndexProximal -> IndexMetacarpal
+        //BoneParents.Add(7);		// IndexIntermediate -> IndexProximal
+        //BoneParents.Add(8);		// IndexDistal -> IndexIntermediate
+        //BoneParents.Add(9);		// IndexTip -> IndexDistal
+
+        //BoneParents.Add(1);		// MiddleMetacarpal -> Wrist
+        //BoneParents.Add(11);	// MiddleProximal -> MiddleMetacarpal
+        //BoneParents.Add(12);	// MiddleIntermediate -> MiddleProximal
+        //BoneParents.Add(13);	// MiddleDistal -> MiddleIntermediate
+        //BoneParents.Add(14);	// MiddleTip -> MiddleDistal
+
+        //BoneParents.Add(1);		// RingMetacarpal -> Wrist
+        //BoneParents.Add(16);	// RingProximal -> RingMetacarpal
+        //BoneParents.Add(17);	// RingIntermediate -> RingProximal
+        //BoneParents.Add(18);	// RingDistal -> RingIntermediate
+        //BoneParents.Add(19);	// RingTip -> RingDistal
+
+        //BoneParents.Add(1);		// LittleMetacarpal -> Wrist
+        //BoneParents.Add(21);	// LittleProximal -> LittleMetacarpal
+        //BoneParents.Add(22);	// LittleIntermediate -> LittleProximal
+        //BoneParents.Add(23);	// LittleDistal -> LittleIntermediate
+        //BoneParents.Add(24);	// LittleTip -> LittleDistal
+
+        skeletal->SetBoneParents(m_advancedPoseBoneParents);
+
+        // apply base data to advanced pose data now
+        advancedPoseData.InitializeWith(baseData);
+    }
+
+    m_liveLinkClient->RemoveSubject_AnyThread(m_advancedPoseSubjectKey);
+    m_liveLinkClient->PushSubjectStaticData_AnyThread(m_advancedPoseSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(advancedPoseData));
+}
+
+void AimationLiveLinkSource::OnReceiveTrackData(const FAimationFrameData& packet)
+{
+    if (packet.IsNewFrame)
+    {
     }
 }
 

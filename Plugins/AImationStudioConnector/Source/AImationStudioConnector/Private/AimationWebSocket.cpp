@@ -15,12 +15,15 @@ UAimationWebSocket::~UAimationWebSocket()
 
 bool UAimationWebSocket::Connect(const FString& InUrl)
 {
-    WebSocket = FWebSocketsModule::Get().CreateWebSocket(InUrl);
-
     if (!WebSocket.IsValid())
     {
-        UE_LOG(LogTemp, Error, TEXT("AimationWebSocket failed to create socket for url"));
-        return false;
+        WebSocket = FWebSocketsModule::Get().CreateWebSocket(InUrl);
+
+        if (!WebSocket.IsValid())
+        {
+            UE_LOG(LogTemp, Error, TEXT("AimationWebSocket failed to create socket for url"));
+            return false;
+        }
     }
 
     m_receiveBuffer.reserve( 64 * 1024);
@@ -30,13 +33,16 @@ bool UAimationWebSocket::Connect(const FString& InUrl)
     return true;
 }
 
-void UAimationWebSocket::Disconnect()
+bool UAimationWebSocket::Disconnect()
 {
     if (WebSocket.IsValid() && WebSocket->IsConnected())
     {
         WebSocket->Close();
         WebSocket = nullptr;
+        return true;
     }
+
+    return false;
 }
 
 void UAimationWebSocket::OnBinaryMessage(const void* InData, SIZE_T InSize, bool isLastFragment)

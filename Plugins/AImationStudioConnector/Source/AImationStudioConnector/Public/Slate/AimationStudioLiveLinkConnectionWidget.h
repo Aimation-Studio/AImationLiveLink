@@ -8,7 +8,7 @@
 #include "Widgets/Input/SNumericEntryBox.h"
 #include <Containers/UnrealString.h>
 
-DECLARE_DELEGATE_OneParam(FOnLiveLinkStartConnection, FAimationLiveLinkSettings);
+DECLARE_DELEGATE_OneParam(FOnLiveLinkStartConnection, FAimationConnectionSettings);
 
 /**
  * Widget for Animation Studio Live Link Connection settings.
@@ -24,9 +24,10 @@ public:
     void Construct(const FArguments& InArgs);
 
 private:
-    FAimationLiveLinkSettings ConnectionSettings;
+    FAimationConnectionSettings ConnectionSettings;
     FOnLiveLinkStartConnection OnStartConnectLiveLink;
 
+    TSharedPtr<SEditableTextBox> EngineNameInputBox;
     TSharedPtr<SEditableTextBox> IPEditableTextBox;
     TSharedPtr<SNumericEntryBox<uint32>> PortNumericEntryBox;
     TSharedPtr<SButton> ConnectButton;
@@ -35,5 +36,6 @@ private:
     void UpdateConnectButton();
     void OnIPTextChanged(const FText& InText, ETextCommit::Type CommitType);
     void OnPortValueChanged(uint32 NewValue, ETextCommit::Type CommitType);
+    void OnEngineNameTextChanged(const FText& InText, ETextCommit::Type CommitType);
     bool IsIPValid(const FString& IPAddress);
 };

@@ -33,6 +33,6 @@ public:
     virtual TSharedPtr<ILiveLinkSource> CreateSource(const FString& ConnectionString) const override;
 
 private:
-    void OnLiveLinkSourceStartConnection(FAimationLiveLinkSettings, FOnLiveLinkSourceCreated) const;
+    void OnLiveLinkSourceStartConnection(FAimationConnectionSettings, FOnLiveLinkSourceCreated) const;
 };
 

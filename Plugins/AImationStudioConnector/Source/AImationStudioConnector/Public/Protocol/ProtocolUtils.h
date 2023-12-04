@@ -34,7 +34,6 @@ namespace detail
     using MemberFunction = void(T ::*)(Arg);
 };
 
-// todo move me elsewhere
 class PacketHandlerMgr
 {
 public:

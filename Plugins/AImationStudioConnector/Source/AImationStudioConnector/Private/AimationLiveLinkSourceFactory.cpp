@@ -15,17 +15,17 @@ TSharedPtr<SWidget> UCustomLiveLinkSourceFactory::BuildCreationPanel(FOnLiveLink
 
 TSharedPtr<ILiveLinkSource> UCustomLiveLinkSourceFactory::CreateSource(const FString& ConnectionString) const
 {
-    FAimationLiveLinkSettings settings;
+    FAimationConnectionSettings settings;
     if (!ConnectionString.IsEmpty())
-        FAimationLiveLinkSettings::StaticStruct()->ImportText(*ConnectionString, &settings, nullptr, PPF_None, GLog, TEXT("ULiveLinkFreeDSourceFactory"));
+        FAimationConnectionSettings::StaticStruct()->ImportText(*ConnectionString, &settings, nullptr, PPF_None, GLog, TEXT("ULiveLinkFreeDSourceFactory"));
 
     return MakeShared<AimationLiveLinkSource>(MoveTemp(settings));
 }
 
-void UCustomLiveLinkSourceFactory::OnLiveLinkSourceStartConnection(FAimationLiveLinkSettings settings, FOnLiveLinkSourceCreated source) const
+void UCustomLiveLinkSourceFactory::OnLiveLinkSourceStartConnection(FAimationConnectionSettings settings, FOnLiveLinkSourceCreated source) const
 {
     FString ConnectionString;
-    FAimationLiveLinkSettings::StaticStruct()->ExportText(ConnectionString, &settings, nullptr, nullptr, PPF_None, nullptr);
+    FAimationConnectionSettings::StaticStruct()->ExportText(ConnectionString, &settings, nullptr, nullptr, PPF_None, nullptr);
     TSharedPtr<AimationLiveLinkSource> aimationClient = MakeShared<AimationLiveLinkSource>(MoveTemp(settings));
     source.ExecuteIfBound(aimationClient, MoveTemp(ConnectionString));
 }
