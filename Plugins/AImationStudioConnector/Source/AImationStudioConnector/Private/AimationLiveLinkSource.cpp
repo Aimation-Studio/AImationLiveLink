@@ -189,7 +189,6 @@ void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConne
     }
 
     m_advancedPoseSubjectKey = { m_sourceGuid, m_bodySubjectName };
-
     FLiveLinkStaticDataStruct advancedPoseData;
     {
         static FAImationBoneData bd{};
@@ -203,49 +202,14 @@ void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConne
         m_advancedPoseBoneParents.Reserve(BoneNames.Num());
         m_advancedPoseBoneTransforms.Reserve(BoneNames.Num());
 
-        for ( int32 boneId = 0; boneId < BoneNames.Num(); ++boneId )
+        for (int32 boneId = 0; boneId < BoneNames.Num(); ++boneId)
         {
             m_advancedPoseBoneParents.Add(-1);
+            m_advancedPoseBoneTransforms.Add(FTransform::Identity);
         }
-        //BoneParents.Reserve(BoneNames.Num());
-        //BoneKeypoints.Reserve(EHandKeypointCount);
-
-        // Manually build the parent hierarchy starting at the wrist which has no parent (-1)
-        //BoneParents.Add(1);		// Palm
-        //BoneParents.Add(-1);	// Wrist -> Palm
-
-        //BoneParents.Add(1);		// ThumbMetacarpal -> Wrist
-        //BoneParents.Add(2);		// ThumbProximal -> ThumbMetacarpal
-        //BoneParents.Add(3);		// ThumbDistal -> ThumbProximal
-        //BoneParents.Add(4);		// ThumbTip -> ThumbDistal
-
-        //BoneParents.Add(1);		// IndexMetacarpal -> Wrist
-        //BoneParents.Add(6);		// IndexProximal -> IndexMetacarpal
-        //BoneParents.Add(7);		// IndexIntermediate -> IndexProximal
-        //BoneParents.Add(8);		// IndexDistal -> IndexIntermediate
-        //BoneParents.Add(9);		// IndexTip -> IndexDistal
-
-        //BoneParents.Add(1);		// MiddleMetacarpal -> Wrist
-        //BoneParents.Add(11);	// MiddleProximal -> MiddleMetacarpal
-        //BoneParents.Add(12);	// MiddleIntermediate -> MiddleProximal
-        //BoneParents.Add(13);	// MiddleDistal -> MiddleIntermediate
-        //BoneParents.Add(14);	// MiddleTip -> MiddleDistal
-
-        //BoneParents.Add(1);		// RingMetacarpal -> Wrist
-        //BoneParents.Add(16);	// RingProximal -> RingMetacarpal
-        //BoneParents.Add(17);	// RingIntermediate -> RingProximal
-        //BoneParents.Add(18);	// RingDistal -> RingIntermediate
-        //BoneParents.Add(19);	// RingTip -> RingDistal
-
-        //BoneParents.Add(1);		// LittleMetacarpal -> Wrist
-        //BoneParents.Add(21);	// LittleProximal -> LittleMetacarpal
-        //BoneParents.Add(22);	// LittleIntermediate -> LittleProximal
-        //BoneParents.Add(23);	// LittleDistal -> LittleIntermediate
-        //BoneParents.Add(24);	// LittleTip -> LittleDistal
 
         skeletal->SetBoneParents(m_advancedPoseBoneParents);
-
-        // apply base data to advanced pose data now
+        // apply base data to advanced pose data now, skeletal is part of baseData
         advancedPoseData.InitializeWith(baseData);
     }
 
@@ -257,6 +221,7 @@ void AimationLiveLinkSource::OnReceiveTrackData(const FAimationFrameData& packet
 {
     if (packet.IsNewFrame)
     {
+        UE_LOG(LogTemp, Warning, TEXT(" Aimation LiveLink received new frame, but we are not ready to receive it yet."));
     }
 }
 
