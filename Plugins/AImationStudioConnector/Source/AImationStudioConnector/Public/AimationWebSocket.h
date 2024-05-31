@@ -7,6 +7,7 @@
 #include "IWebSocket.h"
 #include "Protocol/ProtocolUtils.h"
 #include <Containers/UnrealString.h>
+#include <vector>
 
 struct FRegisterEngineConnectorResponsePacket;
 

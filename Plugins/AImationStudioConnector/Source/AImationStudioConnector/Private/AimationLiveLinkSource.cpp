@@ -192,25 +192,11 @@ void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConne
     FLiveLinkStaticDataStruct advancedPoseData;
     {
         static FAImationBoneData bd{};
-        FLiveLinkStaticDataStruct baseData;
-        baseData.InitializeWith(FLiveLinkSkeletonStaticData::StaticStruct(), nullptr);
-        FLiveLinkSkeletonStaticData* skeletal = baseData.Cast<FLiveLinkSkeletonStaticData>();
+        advancedPoseData.InitializeWith(FLiveLinkSkeletonStaticData::StaticStruct(), nullptr);
+        FLiveLinkSkeletonStaticData* skeletal = advancedPoseData.Cast<FLiveLinkSkeletonStaticData>();
 
-        TArray<FName>& BoneNames = skeletal->BoneNames;
-        BoneNames = bd.BoneNames;
-        // Array of bone indices to parent bone index
-        m_advancedPoseBoneParents.Reserve(BoneNames.Num());
-        m_advancedPoseBoneTransforms.Reserve(BoneNames.Num());
-
-        for (int32 boneId = 0; boneId < BoneNames.Num(); ++boneId)
-        {
-            m_advancedPoseBoneParents.Add(-1);
-            m_advancedPoseBoneTransforms.Add(FTransform::Identity);
-        }
-
-        skeletal->SetBoneParents(m_advancedPoseBoneParents);
-        // apply base data to advanced pose data now, skeletal is part of baseData
-        advancedPoseData.InitializeWith(baseData);
+        skeletal->SetBoneNames( bd.BoneNames );
+        skeletal->SetBoneParents(bd.BoneParents);
     }
 
     m_liveLinkClient->RemoveSubject_AnyThread(m_advancedPoseSubjectKey);
@@ -219,9 +205,17 @@ void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConne
 
 void AimationLiveLinkSource::OnReceiveTrackData(const FAimationFrameData& packet)
 {
-    if (packet.IsNewFrame)
+    FLiveLinkFrameDataStruct frameData;
+    frameData.InitializeWith( FLiveLinkAnimationFrameData::StaticStruct(), nullptr );
+    FLiveLinkAnimationFrameData * fdRaw = frameData.Cast<FLiveLinkAnimationFrameData>();
+    fdRaw->WorldTime = packet.FrameID;
+    fdRaw->Transforms.SetNumUninitialized( FAImationBoneData::BoneCount );
+    for ( int32 boneId = 0; boneId < FAImationBoneData::BoneCount; ++boneId )
     {
-        UE_LOG(LogTemp, Warning, TEXT(" Aimation LiveLink received new frame, but we are not ready to receive it yet."));
+        if ( boneId >= packet.BoneLocations.Num() || boneId >= packet.BoneRotations.Num() )
+            break;
+        fdRaw->Transforms[ boneId ].SetComponents( packet.BoneRotations[ boneId ].ToFQuat(), packet.BoneLocations[ boneId ].ToFVector(), FVector3d::OneVector );
     }
+    m_liveLinkClient->PushSubjectFrameData_AnyThread( m_advancedPoseSubjectKey, MoveTemp( frameData ) );
 }
 

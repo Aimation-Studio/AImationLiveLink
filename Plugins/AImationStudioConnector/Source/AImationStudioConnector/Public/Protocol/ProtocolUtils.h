@@ -63,7 +63,7 @@ public:
             }
             catch (std::exception& e)
             {
-                UE_LOG(LogTemp, Warning, TEXT("Failed to deserialize packet %d: %s"), _handlerId, e.what());
+                UE_LOG(LogTemp, Warning, TEXT("Failed to deserialize packet %d: %hs"), _handlerId, e.what());
                 return false;
             }
         };

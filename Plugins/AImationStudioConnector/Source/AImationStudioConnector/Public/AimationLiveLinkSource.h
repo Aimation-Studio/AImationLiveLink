@@ -67,8 +67,4 @@ private:
     FName const m_rightHandSubjectName{ "Right Hand" };
     FName const m_leftHandSubjectName{ "Left Hand" };
     FLiveLinkSubjectKey m_advancedPoseSubjectKey{ };
-    TArray<int32> m_advancedPoseBoneParents{ };
-    /// Latest bone transforms for advanced pose coming from AImation studio.
-    /// Transforms are in AImation world space
-    TArray<FTransform> m_advancedPoseBoneTransforms{ };
 };
