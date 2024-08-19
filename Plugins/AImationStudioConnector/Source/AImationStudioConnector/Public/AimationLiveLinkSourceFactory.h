@@ -1,4 +1,5 @@
 
+#pragma once
 #include "CoreMinimal.h"
 #include "LiveLinkSourceFactory.h"
 #include "AimationLiveLinkSettings.h"

@@ -11,6 +11,8 @@
 #include <Roles/LiveLinkAnimationTypes.h>
 #include "estimators/BoneData.h"
 #include "Protocol/TrackStreamingPackets.h"
+#include "Logging/StructuredLog.h"
+#include "Misc/QualifiedFrameTime.h"
 
 AimationLiveLinkSource::AimationLiveLinkSource(FAimationConnectionSettings&& settings)
     : ILiveLinkSource()
@@ -37,7 +39,7 @@ void AimationLiveLinkSource::ReceiveClient(ILiveLinkClient* InClient, FGuid InSo
 void AimationLiveLinkSource::InitializeSettings(ULiveLinkSourceSettings* Settings)
 {
     UE_LOG(LogTemp, Warning, TEXT("AimationLiveLinkSource::InitializeSettings"));
-    m_liveLinkSettings = Cast<UAimationLiveLinkSettings>(Settings);
+    m_requestedPose = Cast<UAimationLiveLinkSettings>(Settings)->DataForRetargetting ? PoseType::WorldCoordsPose : PoseType::LocalCoordsPose;
 }
 
 void AimationLiveLinkSource::Update()
@@ -92,6 +94,17 @@ FText AimationLiveLinkSource::GetSourceStatus() const
     return FText::FromString("Connected");
 }
 
+void AimationLiveLinkSource::OnSettingsChanged( ULiveLinkSourceSettings * Settings, const FPropertyChangedEvent & PropertyChangedEvent )
+{
+    auto newRequest = Cast<UAimationLiveLinkSettings>( Settings )->DataForRetargetting ? PoseType::WorldCoordsPose : PoseType::LocalCoordsPose;
+    if ( newRequest != m_requestedPose )
+    {
+        m_requestedPose = newRequest;
+        // repeat register packet
+        OnConnected();
+    }
+}
+
 void AimationLiveLinkSource::OnConnected()
 {
     // we might connect while we were asked to be destroyed, skip if so
@@ -100,7 +113,9 @@ void AimationLiveLinkSource::OnConnected()
 
     // we will await a response packet from aimation now
     FRegisterEngineConnectorPacket packet{};
-    packet.ClientName = "Unreal Engine 5.3";
+    packet.ClientName = m_connectionSettings.EngineName;
+    
+    packet.RequestedPoseType = static_cast<std::underlying_type_t<PoseType>>(m_requestedPose);
     m_socket->SendPacket(packet);
 }
 
@@ -152,6 +167,7 @@ void AimationLiveLinkSource::Connect()
     }
     else
     {
+        m_isClosed = true;
         StartReconnectTimer();
     }
 }
@@ -179,12 +195,12 @@ void AimationLiveLinkSource::StartReconnectTimer()
     }
 }
 
-void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConnectorResponsePacket& packet)
+void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConnectorResponsePacket& packet, const AppendedBinaryStore& appendedBinaryData)
 {
     auto poseType = packet.AimationPose;
-    if (poseType != PoseType::AdvancedHandsPose)
+    if (poseType != m_requestedPose)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Aimation LiveLink only works with advanced pose."), static_cast<int32>(poseType));
+        UE_LOG(LogTemp, Warning, TEXT("Aimation LiveLink received other pose type than requested."));
         return;
     }
 
@@ -195,7 +211,7 @@ void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConne
         advancedPoseData.InitializeWith(FLiveLinkSkeletonStaticData::StaticStruct(), nullptr);
         FLiveLinkSkeletonStaticData* skeletal = advancedPoseData.Cast<FLiveLinkSkeletonStaticData>();
 
-        skeletal->SetBoneNames( bd.BoneNames );
+        skeletal->SetBoneNames(bd.BoneNames);
         skeletal->SetBoneParents(bd.BoneParents);
     }
 
@@ -203,19 +219,93 @@ void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConne
     m_liveLinkClient->PushSubjectStaticData_AnyThread(m_advancedPoseSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(advancedPoseData));
 }
 
-void AimationLiveLinkSource::OnReceiveTrackData(const FAimationFrameData& packet)
+TArray<FAimationVector3> DeserializeLocations(const aimation::BinaryBlobData& BinaryData)
 {
+    TArray<FAimationVector3> Result;
+
+    FMemoryReader Reader(BinaryData.data, true);
+    Reader.Seek(0);
+
+    Result.Reserve(BinaryData.header.Size);
+    for (size_t i = 0; i < BinaryData.header.Size; ++i)
+    {
+        size_t sizeOfThreeFloats = 3 * sizeof(float);
+        float X, Y, Z = 0.f;
+        Reader << X;
+        Reader << Y;
+        Reader << Z;
+
+        // check if we had an error at reading
+        if (Reader.IsError())
+        {
+            UE_LOG(LogTemp, Error, TEXT("Error reading binary blob data, skipping the rest of the data."));
+            checkf(false, TEXT("Error reading binary blob data, skipping the rest of the data."));
+            break;
+        }
+
+        Result.Add(FAimationVector3(X, Y, Z));
+    }
+
+    return Result;
+}
+
+TArray<FAimationQuaternion> DeserializeRotations(const aimation::BinaryBlobData& binData)
+{
+    TArray<FAimationQuaternion> Result;
+
+    FMemoryReader Reader(binData.data, true);
+    Reader.Seek(0);
+
+    Result.Reserve(binData.header.Size);
+    for (size_t i = 0; i < binData.header.Size; ++i)
+    {
+        float X, Y, Z, W;
+        Reader << X << Y << Z << W;
+        Result.Add(FAimationQuaternion(X, Y, Z, W));
+    }
+
+    return Result;
+}
+
+void AimationLiveLinkSource::OnReceiveTrackData(const FAimationFrameData& constPkt, const AppendedBinaryStore& appendedBinaryData)
+{
+    UE_LOGFMT(LogTemp, Verbose, "Received track data, appended bin data size {BinDataSize}", appendedBinaryData.Num());
     FLiveLinkFrameDataStruct frameData;
-    frameData.InitializeWith( FLiveLinkAnimationFrameData::StaticStruct(), nullptr );
-    FLiveLinkAnimationFrameData * fdRaw = frameData.Cast<FLiveLinkAnimationFrameData>();
-    fdRaw->WorldTime = packet.FrameID;
-    fdRaw->Transforms.SetNumUninitialized( FAImationBoneData::BoneCount );
-    for ( int32 boneId = 0; boneId < FAImationBoneData::BoneCount; ++boneId )
+    frameData.InitializeWith(FLiveLinkAnimationFrameData::StaticStruct(), nullptr);
+
+    auto boneLocations = DeserializeLocations(appendedBinaryData[0]);
+    auto boneRots = DeserializeRotations(appendedBinaryData[1]);
+
+    FAimationFrameData packet = constPkt;
+    packet.BoneLocations = MoveTemp(boneLocations);
+    packet.BoneRotations = MoveTemp(boneRots);
+
+    FLiveLinkAnimationFrameData* fdRaw = frameData.Cast<FLiveLinkAnimationFrameData>();
+    fdRaw->WorldTime = constPkt.WorldTimeInSeconds;
+    FQualifiedFrameTime qft{ };
+    qft.Rate = { 60, 1 };
+    qft.Time = FFrameTime{ static_cast<int32>(constPkt.FrameID) };
+    fdRaw->MetaData.SceneTime = MoveTemp(qft);
+
+    //fdRaw->MetaData.SceneTime = FQualifiedFrameTime{ constPkt.FrameID, { 60, 1 } };
+
+    fdRaw->Transforms.SetNumUninitialized(FAImationBoneData::BoneCount);
+    for (int32 boneId = 0; boneId < FAImationBoneData::BoneCount; ++boneId)
     {
         if ( boneId >= packet.BoneLocations.Num() || boneId >= packet.BoneRotations.Num() )
+        {
+            UE_LOGFMT( LogTemp, Log, "Received track data, bone {0} missing", boneId );
             break;
-        fdRaw->Transforms[ boneId ].SetComponents( packet.BoneRotations[ boneId ].ToFQuat(), packet.BoneLocations[ boneId ].ToFVector(), FVector3d::OneVector );
+        }
+
+        fdRaw->Transforms[boneId].SetComponents(packet.BoneRotations[boneId].ToFQuat(), packet.BoneLocations[boneId].ToFVector(), FVector3d::OneVector);
+        if ( fdRaw->Transforms[ boneId ].ContainsNaN() )
+        {
+            UE_LOG( LogTemp, Log, TEXT( "received data contains NaN" ) );
+        }
     }
-    m_liveLinkClient->PushSubjectFrameData_AnyThread( m_advancedPoseSubjectKey, MoveTemp( frameData ) );
+
+    UE_LOGFMT(LogTemp, Verbose, "Received track data, bone locations size {BoneLocSize}, bone rotations size {BoneRotationsSize}", boneLocations.Num(), boneRots.Num());
+    m_liveLinkClient->PushSubjectFrameData_AnyThread(m_advancedPoseSubjectKey, MoveTemp(frameData));
 }
 

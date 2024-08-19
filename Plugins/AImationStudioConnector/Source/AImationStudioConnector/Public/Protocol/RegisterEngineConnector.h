@@ -6,6 +6,13 @@
 
 #include "RegisterEngineConnector.generated.h"
 
+UENUM()
+enum class PoseType : uint32
+{
+    LocalCoordsPose = 0,
+    WorldCoordsPose = 1
+};
+
 USTRUCT()
 struct FRegisterEngineConnectorPacket
 {
@@ -18,7 +25,7 @@ struct FRegisterEngineConnectorPacket
         FString ClientName = "Unreal Engine";
 
     UPROPERTY()
-        uint32 EngineConnectorType = 0; // maps to EngineConnectorType enum in AimationStudio
+        uint32 RequestedPoseType = 0; //TODO: fix serializing enums between UE and AImation, then replace this with PoseType
 };
 
 UENUM()
@@ -27,13 +34,6 @@ enum class ResponseCode : uint32
     Success = 0,
     ConnectorWithNameExists = 1,
     UnknownFailure = 2
-};
-
-UENUM()
-enum class PoseType : uint32
-{
-    BasePose = 0,
-    AdvancedHandsPose = 1
 };
 
 USTRUCT()
@@ -49,7 +49,7 @@ public:
         ResponseCode Response = ResponseCode::Success;
 
     UPROPERTY()
-        PoseType AimationPose = PoseType::BasePose;
+        PoseType AimationPose = PoseType::LocalCoordsPose;
 };
 
 USTRUCT()

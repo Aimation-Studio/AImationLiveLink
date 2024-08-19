@@ -59,17 +59,17 @@ public:
     uint32 HandlerID = 17;
 
     UPROPERTY()
-    bool IsNewFrame = false;
-
-    UPROPERTY()
-    bool IsLastFrame = false;
-
-    UPROPERTY()
     uint32 FrameID = 0;
 
     UPROPERTY()
-    TArray<FAimationVector3> BoneLocations;
+    uint32 BoneCount = 0;
 
     UPROPERTY()
+    double WorldTimeInSeconds = 0.0;
+
+    UPROPERTY(SkipSerialization) // appended binary data, transform them manually ( origin is vec3 of floats )
+    TArray<FAimationVector3> BoneLocations;
+
+    UPROPERTY(SkipSerialization) // appended binary data, transform them manually ( origin is vec4 of floats )
     TArray<FAimationQuaternion> BoneRotations;
 };

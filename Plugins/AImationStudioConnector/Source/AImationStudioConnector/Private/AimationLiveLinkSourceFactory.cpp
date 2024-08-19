@@ -17,7 +17,7 @@ TSharedPtr<ILiveLinkSource> UCustomLiveLinkSourceFactory::CreateSource(const FSt
 {
     FAimationConnectionSettings settings;
     if (!ConnectionString.IsEmpty())
-        FAimationConnectionSettings::StaticStruct()->ImportText(*ConnectionString, &settings, nullptr, PPF_None, GLog, TEXT("ULiveLinkFreeDSourceFactory"));
+        FAimationConnectionSettings::StaticStruct()->ImportText(*ConnectionString, &settings, nullptr, PPF_None, GLog, TEXT("UAImationLiveLinkSourceSettings"));
 
     return MakeShared<AimationLiveLinkSource>(MoveTemp(settings));
 }

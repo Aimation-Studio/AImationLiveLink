@@ -1,14 +1,15 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "BinaryBlobData.hpp"
 #include "Containers/Array.h"
-#include <JsonObjectConverter.h>
-#include <Templates/UnrealTypeTraits.h>
-#include <Serialization/JsonReader.h>
-#include <Dom/JsonObject.h>
-#include <Templates/Function.h>
+#include "CoreMinimal.h"
+#include "Dom/JsonObject.h"
+#include "JsonObjectConverter.h"
 #include "JsonUtilities.h"
+#include "Serialization/JsonReader.h"
+#include "Templates/Function.h"
+#include "Templates/UnrealTypeTraits.h"
 
 struct AimationHelpers
 {
@@ -30,8 +31,10 @@ struct AimationHelpers
 
 namespace detail
 {
-    template< typename T, typename Arg >
-    using MemberFunction = void(T ::*)(Arg);
+    using AppendedBinaryStore = TArray<aimation::BinaryBlobData>;
+
+    template< typename T, typename Packet >
+    using MemberFunction = void(T ::*)(const Packet&, const AppendedBinaryStore&);
 };
 
 class PacketHandlerMgr
@@ -41,27 +44,26 @@ public:
 
     template <typename Packet, typename U>
     typename TEnableIf<std::is_same_v<decltype(Packet::HandlerID), uint32>>::Type
-        RegisterPacketHandler(U* self, detail::MemberFunction<U, Packet const&> callback)
+        RegisterPacketHandler(U* self, detail::MemberFunction<U, Packet> callback)
     {
         uint32 handlerId = Packet{}.HandlerID;
-        auto handler = [self, callback, _handlerId = handlerId](FString const& msg)
+        auto handler = [self, callback, _handlerId = handlerId](FString const& msg, const detail::AppendedBinaryStore& appendedBinaryData)
         {
             try
             {
-                TSharedPtr<FJsonObject> JsonObject;
-                TSharedRef<TJsonReader<>> JsonReader = TJsonReaderFactory<>::Create(std::move(msg));
-
                 Packet deserialized{};
-                if (!FJsonObjectConverter::JsonObjectStringToUStruct(msg, &deserialized, 0, 0))
+                if (!FJsonObjectConverter::JsonObjectStringToUStruct(msg, &deserialized, 0, CPF_SkipSerialization))
                 {
                     UE_LOG(LogTemp, Warning, TEXT("Failed to deserialize packet %d"), _handlerId);
                     return false;
                 }
 
-                (self->*callback)(*reinterpret_cast<Packet const*>(&deserialized));
+                // we pass in the binary data as argument because it is hard to deserialize those fields in a generic way
+                // because unreal does not support reflecting on std types and the binary data is usually an std type of some kind serialized to binary
+                (self->*callback)(*reinterpret_cast<Packet const*>(&deserialized), appendedBinaryData);
                 return true;
             }
-            catch (std::exception& e)
+            catch (std::exception& e) // we're no longer using nlohmann here, this exception will never be caught TODO
             {
                 UE_LOG(LogTemp, Warning, TEXT("Failed to deserialize packet %d: %hs"), _handlerId, e.what());
                 return false;
@@ -77,5 +79,6 @@ public:
     }
 
 protected:
-    TMap<uint32, TFunction<bool(FString const&)>> m_handlers;
+    using PacketHandler = TFunction<bool(FString const&, const detail::AppendedBinaryStore&)>;
+    TMap<uint32, PacketHandler> m_handlers;
 };

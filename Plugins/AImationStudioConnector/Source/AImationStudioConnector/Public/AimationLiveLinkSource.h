@@ -5,6 +5,7 @@
 #include "ILiveLinkSource.h"
 #include "AimationWebSocket.h"
 #include "AimationLiveLinkSettings.h"
+#include "Protocol/RegisterEngineConnector.h"
 
 struct FRegisterEngineConnectorResponsePacket;
 struct FRegisterBodySubjectServerPacket;
@@ -22,6 +23,7 @@ struct FAimationFrameData;
 // await animation start/stop packets TODO
 class AIMATIONSTUDIOCONNECTOR_API AimationLiveLinkSource : public ILiveLinkSource
 {
+    using AppendedBinaryStore = TArray<aimation::BinaryBlobData>;
 public:
     AimationLiveLinkSource(FAimationConnectionSettings&& settings);
     virtual ~AimationLiveLinkSource() override;
@@ -39,6 +41,7 @@ public:
     virtual TSubclassOf<ULiveLinkSourceSettings> GetSettingsClass() const override {
         return UAimationLiveLinkSettings::StaticClass();
     }
+    virtual void OnSettingsChanged( ULiveLinkSourceSettings * Settings, const FPropertyChangedEvent & PropertyChangedEvent ) override;
 
 protected:
     void OnConnected();
@@ -48,20 +51,20 @@ protected:
     void OnSocketClose();
     void OnMessage(const FString& Message);
 
-    void OnRegisterEngineResponse(const FRegisterEngineConnectorResponsePacket& packet);
-    void OnReceiveTrackData(const FAimationFrameData& packet);
+    void OnRegisterEngineResponse(const FRegisterEngineConnectorResponsePacket& packet, const AppendedBinaryStore& appendedBinaryData);
+    void OnReceiveTrackData(const FAimationFrameData& packet, const AppendedBinaryStore& appendedBinaryData);
 private:
     void Connect();
     void StartReconnectTimer();
 
     FAimationConnectionSettings m_connectionSettings;
+    PoseType m_requestedPose;
     TUniquePtr<UAimationWebSocket> m_socket;
     FTimerHandle m_reconnectTimerHandle;
     FThreadSafeBool m_isClosing = false;
     FThreadSafeBool m_isClosed = false;
 
     ILiveLinkClient* m_liveLinkClient{ nullptr };
-    UAimationLiveLinkSettings* m_liveLinkSettings{ nullptr };
     FGuid m_sourceGuid{ };
     FName const m_bodySubjectName{ "Body" };
     FName const m_rightHandSubjectName{ "Right Hand" };

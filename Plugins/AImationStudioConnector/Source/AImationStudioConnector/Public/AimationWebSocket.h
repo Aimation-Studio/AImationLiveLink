@@ -10,6 +10,7 @@
 #include <vector>
 
 struct FRegisterEngineConnectorResponsePacket;
+class FArchive;
 
 class AIMATIONSTUDIOCONNECTOR_API UAimationWebSocket : public PacketHandlerMgr
 {
@@ -34,6 +35,8 @@ public:
         auto registerEnginePkt = AimationHelpers::CreateAimationPacket(out);
         WebSocket->Send(registerEnginePkt.GetData(), registerEnginePkt.Num(), true);
     }
+
+    void DecomposeBuffer();
 
 private:
     TSharedPtr<IWebSocket> WebSocket;
