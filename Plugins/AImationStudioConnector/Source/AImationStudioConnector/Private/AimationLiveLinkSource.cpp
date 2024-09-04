@@ -195,28 +195,37 @@ void AimationLiveLinkSource::StartReconnectTimer()
     }
 }
 
-void AimationLiveLinkSource::OnRegisterEngineResponse(const FRegisterEngineConnectorResponsePacket& packet, const AppendedBinaryStore& appendedBinaryData)
+void AimationLiveLinkSource::OnRegisterEngineResponse( const FRegisterEngineConnectorResponsePacket & packet, const AppendedBinaryStore & appendedBinaryData )
 {
     auto poseType = packet.AimationPose;
-    if (poseType != m_requestedPose)
+    if ( poseType != m_requestedPose )
     {
-        UE_LOG(LogTemp, Warning, TEXT("Aimation LiveLink received other pose type than requested."));
+        UE_LOG( LogTemp, Warning, TEXT( "Aimation LiveLink received other pose type than requested." ) );
         return;
     }
 
-    m_advancedPoseSubjectKey = { m_sourceGuid, m_bodySubjectName };
-    FLiveLinkStaticDataStruct advancedPoseData;
+    m_basePoseSubjectKey = { m_sourceGuid, m_bodySubjectName };
+    m_advancedPoseSubjectKey = { m_sourceGuid, m_bodyHandsSubjectName };
+    FLiveLinkStaticDataStruct advancedPoseData, basePoseData;
     {
         static FAImationBoneData bd{};
-        advancedPoseData.InitializeWith(FLiveLinkSkeletonStaticData::StaticStruct(), nullptr);
-        FLiveLinkSkeletonStaticData* skeletal = advancedPoseData.Cast<FLiveLinkSkeletonStaticData>();
-
-        skeletal->SetBoneNames(bd.BoneNames);
-        skeletal->SetBoneParents(bd.BoneParents);
+        basePoseData.InitializeWith( FLiveLinkSkeletonStaticData::StaticStruct(), nullptr );
+        FLiveLinkSkeletonStaticData * skeletal = basePoseData.Cast<FLiveLinkSkeletonStaticData>();
+        skeletal->SetBoneNames( bd.BoneNames );
+        skeletal->SetBoneParents( bd.BoneParents );
+    }
+    {
+        static FAImationAdvancedBoneData abd{};
+        advancedPoseData.InitializeWith( FLiveLinkSkeletonStaticData::StaticStruct(), nullptr );
+        FLiveLinkSkeletonStaticData * skeletalAdv = advancedPoseData.Cast<FLiveLinkSkeletonStaticData>();
+        skeletalAdv->SetBoneNames( abd.BoneNames );
+        skeletalAdv->SetBoneParents( abd.BoneParents );
     }
 
-    m_liveLinkClient->RemoveSubject_AnyThread(m_advancedPoseSubjectKey);
-    m_liveLinkClient->PushSubjectStaticData_AnyThread(m_advancedPoseSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp(advancedPoseData));
+    m_liveLinkClient->RemoveSubject_AnyThread( m_advancedPoseSubjectKey );
+    m_liveLinkClient->PushSubjectStaticData_AnyThread( m_advancedPoseSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp( advancedPoseData ) );
+    m_liveLinkClient->RemoveSubject_AnyThread( m_basePoseSubjectKey );
+    m_liveLinkClient->PushSubjectStaticData_AnyThread( m_basePoseSubjectKey, ULiveLinkAnimationRole::StaticClass(), MoveTemp( basePoseData ) );
 }
 
 TArray<FAimationVector3> DeserializeLocations(const aimation::BinaryBlobData& BinaryData)
@@ -289,8 +298,10 @@ void AimationLiveLinkSource::OnReceiveTrackData(const FAimationFrameData& constP
 
     //fdRaw->MetaData.SceneTime = FQualifiedFrameTime{ constPkt.FrameID, { 60, 1 } };
 
-    fdRaw->Transforms.SetNumUninitialized(FAImationBoneData::BoneCount);
-    for (int32 boneId = 0; boneId < FAImationBoneData::BoneCount; ++boneId)
+    int32 totalCount = packet.BoneLocations.Num() >= FAImationAdvancedBoneData::BoneCount ? FAImationAdvancedBoneData::BoneCount : FAImationBoneData::BoneCount;
+
+    fdRaw->Transforms.SetNumUninitialized( totalCount );
+    for (int32 boneId = 0; boneId < totalCount; ++boneId)
     {
         if ( boneId >= packet.BoneLocations.Num() || boneId >= packet.BoneRotations.Num() )
         {
@@ -306,6 +317,6 @@ void AimationLiveLinkSource::OnReceiveTrackData(const FAimationFrameData& constP
     }
 
     UE_LOGFMT(LogTemp, Verbose, "Received track data, bone locations size {BoneLocSize}, bone rotations size {BoneRotationsSize}", boneLocations.Num(), boneRots.Num());
-    m_liveLinkClient->PushSubjectFrameData_AnyThread(m_advancedPoseSubjectKey, MoveTemp(frameData));
+    m_liveLinkClient->PushSubjectFrameData_AnyThread( packet.BoneLocations.Num() >= FAImationAdvancedBoneData::BoneCount ? m_advancedPoseSubjectKey : m_basePoseSubjectKey, MoveTemp(frameData));
 }
 

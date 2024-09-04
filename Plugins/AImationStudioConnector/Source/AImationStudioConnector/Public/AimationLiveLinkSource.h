@@ -67,7 +67,7 @@ private:
     ILiveLinkClient* m_liveLinkClient{ nullptr };
     FGuid m_sourceGuid{ };
     FName const m_bodySubjectName{ "Body" };
-    FName const m_rightHandSubjectName{ "Right Hand" };
-    FName const m_leftHandSubjectName{ "Left Hand" };
+    FName const m_bodyHandsSubjectName{ "BodyHands" };
+    FLiveLinkSubjectKey m_basePoseSubjectKey{ };
     FLiveLinkSubjectKey m_advancedPoseSubjectKey{ };
 };
