@@ -25,6 +25,13 @@ AimationLiveLinkSource::AimationLiveLinkSource(FAimationConnectionSettings&& set
 
 AimationLiveLinkSource::~AimationLiveLinkSource()
 {
+    if (GEditor->IsTimerManagerValid())
+    {
+        if (m_reconnectTimerHandle.IsValid())
+            GEditor->GetTimerManager()->ClearTimer(m_reconnectTimerHandle);
+    }
+
+    m_reconnectTimerHandle.Invalidate();
 }
 
 void AimationLiveLinkSource::ReceiveClient(ILiveLinkClient* InClient, FGuid InSourceGuid)
